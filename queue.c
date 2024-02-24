@@ -9,51 +9,109 @@
  * following line.
  *   cppcheck-suppress nullPointer
  */
-
+enum { BUFFER_SIZE = 100 };
 
 /* Create an empty queue */
 struct list_head *q_new()
 {
-    return NULL;
+    struct list_head *head =
+        (struct list_head *) malloc(sizeof(struct list_head));
+    if (!head)
+        return NULL;
+    INIT_LIST_HEAD(head);
+    return head;
 }
 
 /* Free all storage used by queue */
-void q_free(struct list_head *l) {}
+void q_free(struct list_head *l)
+{
+    if (!l)
+        return;
+    if (list_empty(l)) {
+        free(l);
+        return;
+    }
+    element_t *entry, *safe;
+    list_for_each_entry_safe (entry, safe, l, list)
+        q_release_element(entry);
+    free(l);
+}
 
 /* Insert an element at head of queue */
 bool q_insert_head(struct list_head *head, char *s)
 {
+    if (!head || !s)
+        return false;
+    element_t *n = (element_t *) malloc(sizeof(element_t));
+    if (!n)
+        return false;
+    n->value = (char *) malloc(strlen(s) + 1);
+    if (!n->value) {
+        q_release_element(n);
+        return false;
+    }
+    strncpy(n->value, s, strlen(s) + 1);
+    list_add(&n->list, head);
     return true;
 }
 
 /* Insert an element at tail of queue */
 bool q_insert_tail(struct list_head *head, char *s)
 {
-    return true;
+    if (!head)
+        return false;
+    return q_insert_head(head->prev, s);
 }
 
 /* Remove an element from head of queue */
 element_t *q_remove_head(struct list_head *head, char *sp, size_t bufsize)
 {
-    return NULL;
+    if (!head || list_empty(head))
+        return NULL;
+    element_t *remove = list_first_entry(head, element_t, list);
+    if (!remove)
+        return NULL;
+    if (sp)
+        strncpy(sp, remove->value, bufsize - 1);
+    list_del(head->next);
+    return remove;
 }
 
 /* Remove an element from tail of queue */
 element_t *q_remove_tail(struct list_head *head, char *sp, size_t bufsize)
 {
-    return NULL;
+    if (!head || list_empty(head))
+        return NULL;
+    return q_remove_head(head->prev->prev, sp, bufsize);
 }
 
 /* Return number of elements in queue */
 int q_size(struct list_head *head)
 {
-    return -1;
+    if (!head || list_empty(head))
+        return 0;
+    int size = 0;
+    element_t *entry, *safe;
+    list_for_each_entry_safe (entry, safe, head, list)
+        size += 1;
+    return size;
 }
 
 /* Delete the middle node in queue */
 bool q_delete_mid(struct list_head *head)
 {
     // https://leetcode.com/problems/delete-the-middle-node-of-a-linked-list/
+    if (!head)
+        return false;
+    struct list_head *left = head->prev;
+    struct list_head *right = head->next;
+    while (left != right && right != left->prev) {
+        left = left->prev;
+        right = right->next;
+    }
+    element_t *remove = list_entry(left, element_t, list);
+    list_del(&remove->list);
+    q_release_element(remove);
     return true;
 }
 
@@ -61,6 +119,21 @@ bool q_delete_mid(struct list_head *head)
 bool q_delete_dup(struct list_head *head)
 {
     // https://leetcode.com/problems/remove-duplicates-from-sorted-list-ii/
+    if (!head || list_empty(head))
+        return false;
+    bool dup = false;
+    element_t *entry, *safe;
+    list_for_each_entry_safe (entry, safe, head, list) {
+        if (&safe->list != head && strcmp(entry->value, safe->value) == 0) {
+            dup = true;
+            list_del(&entry->list);
+            q_release_element(entry);
+        } else if (dup) {
+            dup = false;
+            list_del(&entry->list);
+            q_release_element(entry);
+        }
+    }
     return true;
 }
 
